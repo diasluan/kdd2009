@@ -36,6 +36,10 @@ from sklearn.ensemble import BaggingClassifier
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.ensemble import VotingClassifier
 from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.feature_selection import SelectFromModel
+
+import eli5
+from eli5.sklearn import PermutationImportance
 
 import visualizer as viz
 
@@ -87,8 +91,36 @@ def get_models():
     models['CART'] = DecisionTreeClassifier(random_state=73)
     models['NB'] = GaussianNB()
     models['SVC'] = SVC(probability=True)
-    models['XGB'] = XGBClassifier(objective='binary:logistic', tree_method= 'gpu_hist', seed=73)
+    models['XGB'] = XGBClassifier(objective='binary:logistic', seed=73)
     models['RFC'] = RandomForestClassifier(random_state=73)
     models['GBC'] = GradientBoostingClassifier(random_state=73)
     
     return models
+
+def get_summed_importances(variables, importances, plot=True):
+    # Order importances from highest to lowest
+    i = np.argsort(importances)[::-1]
+    importances = importances[i]
+    variables = variables[i]
+    
+    summed_importances = pd.DataFrame()
+    for i in range(importances.size):
+        importance_sum = importances[:(i+1)].sum()
+        current_var = pd.Series([variables[i], importance_sum])
+        summed_importances = summed_importances.append(current_var, ignore_index=True)
+
+    if plot: plt.scatter(summed_importances.index, summed_importances.iloc[:,1])
+    return summed_importances
+
+def remove_unimportant_vars(features, summed_importances, threshold=0.99):
+    important_vars = list(summed_importances[summed_importances.iloc[:,1] <= threshold].iloc[:,0])
+    features = features.loc[:, important_vars]
+    
+    return features
+
+def permutation_importance(estimator, X, y):
+    permutation = PermutationImportance(estimator, random_state=73, prefit=True).fit(X, y)
+    eli5.show_weights(permutation, feature_names=X.columns.tolist())
+    
+    select = SelectFromModel(permutation, threshold=0.05, prefit=True)
+    return select.transform(X)

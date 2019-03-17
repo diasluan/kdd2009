@@ -68,16 +68,3 @@ def plot_categories_per_feature(dataset):
     print(count)
     plt.hist(count)
     
-def plot_summed_importances(variables, importances):
-    # Order importances from highest to lowest
-    i = np.argsort(importances)[::-1]
-    importances = importances[i]
-    variables = variables[i]
-    
-    summed_importances = pd.DataFrame()
-    for i in range(importances.size):
-        importance_sum = importances[:(i+1)].sum()
-        current_var = pd.Series([variables[i], importance_sum])
-        summed_importances = summed_importances.append(current_var, ignore_index=True)
-    plt.scatter(summed_importances.index, summed_importances.iloc[:,1])
-    return summed_importances
