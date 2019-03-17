@@ -5,11 +5,41 @@ import math
 from sklearn.model_selection import cross_val_score, train_test_split
 from sklearn.metrics import roc_auc_score
 
+# libs basicas data science
+from sklearn import datasets
+import numpy as np
+import pandas as pd
+from scipy import stats
+import math
+
+#libs visualizacao
+import seaborn as sns
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+from IPython.display import Image
+from IPython.core.display import HTML
+from mlxtend.plotting import plot_decision_regions
+
+#sklean model selection http://scikit-learn.org/
+from sklearn.model_selection import cross_val_score, train_test_split
+
+#sklearn classifiers
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.naive_bayes import GaussianNB
+from sklearn.svm import SVC
+from sklearn.dummy import DummyClassifier
+from sklearn.ensemble import BaggingClassifier
+from sklearn.ensemble import AdaBoostClassifier
+from sklearn.ensemble import VotingClassifier
+from sklearn.ensemble import GradientBoostingClassifier
+
 import visualizer as viz
 
-def get_predictions(models, X, y):
-    validation_size = 0.20
-    seed = 73
+def get_predictions(models, X, y, validation_size=0.20, seed=73):
     X_train, X_validation, y_train, y_validation = \
         train_test_split(X, y, test_size=validation_size, random_state=seed)    
     predictions = [y_validation]
@@ -51,12 +81,14 @@ def drop_max_null_features(dataset, threshold):
 
 def get_models():
     models = {}
-    models['LR'] = LogisticRegression()
+    models['LR'] = LogisticRegression(solver='lbfgs')
     models['LDA'] = LinearDiscriminantAnalysis()
     models['KNN'] = KNeighborsClassifier()
-    models['CART'] = DecisionTreeClassifier(random_state=13)
+    models['CART'] = DecisionTreeClassifier(random_state=73)
     models['NB'] = GaussianNB()
     models['SVC'] = SVC(probability=True)
-    models['XGB'] = XGBClassifier()
+    models['XGB'] = XGBClassifier(objective='binary:logistic', tree_method= 'gpu_hist', seed=73)
+    models['RFC'] = RandomForestClassifier(random_state=73)
+    models['GBC'] = GradientBoostingClassifier(random_state=73)
     
     return models

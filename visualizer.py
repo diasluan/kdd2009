@@ -14,7 +14,7 @@ def highlight_error(s):
     is_error = s != s.iloc[0]
     return ['color: red' if v else 'color: black' for v in is_error]
 
-def decision_boundaries(models, X, y, cols=3):        
+def decision_boundaries(models, X, y, cols=2):        
     fig = plt.figure()
     rows = math.ceil(len(models) / (cols * 1.0))
     gs = gridspec.GridSpec(rows, cols)
