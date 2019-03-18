@@ -1,8 +1,9 @@
 import numpy as np
 import pandas as pd
+import pickle
 from scipy import stats
 import math
-from sklearn.model_selection import cross_val_score, train_test_split
+from sklearn.model_selection import cross_val_score, train_test_split, GridSearchCV
 from sklearn.metrics import roc_auc_score
 
 # libs basicas data science
@@ -20,8 +21,11 @@ from IPython.display import Image
 from IPython.core.display import HTML
 from mlxtend.plotting import plot_decision_regions
 
+import xgboost as xgb
+from xgboost import XGBClassifier
+
 #sklean model selection http://scikit-learn.org/
-from sklearn.model_selection import cross_val_score, train_test_split
+from sklearn.model_selection import cross_val_score, train_test_split, GridSearchCV
 
 #sklearn classifiers
 from sklearn.linear_model import LogisticRegression
@@ -42,6 +46,12 @@ import eli5
 from eli5.sklearn import PermutationImportance
 
 import visualizer as viz
+
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
 
 def get_predictions(models, X, y, validation_size=0.20, seed=73):
     X_train, X_validation, y_train, y_validation = \
@@ -97,30 +107,90 @@ def get_models():
     
     return models
 
-def get_summed_importances(variables, importances, plot=True):
-    # Order importances from highest to lowest
-    i = np.argsort(importances)[::-1]
-    importances = importances[i]
-    variables = variables[i]
-    
-    summed_importances = pd.DataFrame()
-    for i in range(importances.size):
-        importance_sum = importances[:(i+1)].sum()
-        current_var = pd.Series([variables[i], importance_sum])
-        summed_importances = summed_importances.append(current_var, ignore_index=True)
+def feature_importance(X, y, threshold=0.005):
+    estimator = GradientBoostingClassifier(
+        max_depth=3,
+        subsample=0.8,
+        verbose=1,  
+        random_state=73
+    )
+    estimator.fit(X, np.array(y).ravel())
+    print('|-------|')
 
-    if plot: plt.scatter(summed_importances.index, summed_importances.iloc[:,1])
-    return summed_importances
-
-def remove_unimportant_vars(features, summed_importances, threshold=0.99):
-    important_vars = list(summed_importances[summed_importances.iloc[:,1] <= threshold].iloc[:,0])
-    features = features.loc[:, important_vars]
-    
-    return features
-
-def permutation_importance(estimator, X, y):
-    permutation = PermutationImportance(estimator, random_state=73, prefit=True).fit(X, y)
-    eli5.show_weights(permutation, feature_names=X.columns.tolist())
-    
-    select = SelectFromModel(permutation, threshold=0.05, prefit=True)
+    select = SelectFromModel(estimator, threshold=threshold, prefit=True)
     return select.transform(X)
+                  
+def split_dataset(features, labels, test_size=0.2):
+    X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=test_size, stratify=labels, random_state=73)
+    y_train, y_test = np.array(y_train).ravel(), np.array(y_test).ravel()
+    
+    return X_train, X_test, y_train, y_test
+                  
+def train_and_report(models, X, y):
+    results = []
+    for name in models.keys():
+        model = models[name]
+        scores = cross_val_score(model, X, y, cv=5, scoring='roc_auc')
+        print("AUC: %.3f (+/- %.3f) [%s]" %(scores.mean(), scores.std(), name))
+                  
+def gbc_params_optimizer(X_train, y_train, n_estimators, learning_rate, min_samples_split, min_samples_leaf, max_depth, max_features, subsample, params, cv=5):
+    np.random.seed(0)
+
+    model = GradientBoostingClassifier(n_estimators=n_estimators, 
+                                       learning_rate=learning_rate,
+                                       min_samples_split=min_samples_split,
+                                       min_samples_leaf=min_samples_leaf, 
+                                       max_depth=max_depth, 
+                                       max_features=max_features, 
+                                       subsample=subsample, 
+                                       random_state=0)
+
+    
+    grid_search = GridSearchCV(estimator=model, 
+                               param_grid=params, 
+                               scoring='roc_auc', 
+                               n_jobs=-1, 
+                               iid=False, 
+                               cv=cv)
+
+    grid_search.fit(X_train, y_train)
+
+    results = grid_search.cv_results_
+    best_params = grid_search.best_params_
+    best_score = grid_search.best_score_
+    print(best_params, best_score)
+    
+    return model, best_params, best_score
+                  
+def gbc_lr_optimizer(X_train, y_train, n_estimators, learning_rate, min_samples_split, min_samples_leaf, 
+                     max_depth, max_features, subsample, params, cv=5, dividers=[2,5,2,5]):
+    models = np.array([])
+    scores = np.array([])
+    
+    for div in dividers:
+        np.random.seed(0)
+        
+        learning_rate /= div
+        n_estimators *= div
+        
+        model = GradientBoostingClassifier(n_estimators = n_estimators, 
+                                         learning_rate = learning_rate,
+                                         min_samples_split = min_samples_split,
+                                         min_samples_leaf = min_samples_leaf, 
+                                         max_depth = max_depth, 
+                                         max_features = max_features, 
+                                         subsample = subsample, 
+                                         random_state = 0)
+
+        cv_scores = cross_val_score(model, X_train, y_train, scoring = 'roc_auc', cv=cv, n_jobs=1)
+        scores = np.append(scores, cv_scores.mean())
+        
+        print('n_estimators: {} | learning_rate: {} | score: {}'.format(n_estimators, learning_rate, cv_scores.mean()))
+        
+        models = np.append(models, model)
+
+    return models, scores
+                  
+def save_model(model, title, path='./models/'):
+    filename = path + title
+    pickle.dump(model, open(filename, 'wb'))
